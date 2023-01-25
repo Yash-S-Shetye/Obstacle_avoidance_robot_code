@@ -1,0 +1,190 @@
+' {$STAMP BS2}
+' {$PBASIC 2.5}
+
+'Program Started'
+'Declaring and initialiing all required variables'
+counter VAR Byte                  'Counter for all the for loops
+CmConstant CON 2260     '         'Constant value for multiplying with the ultrasonic sensor time measurements
+cmDistance VAR Word               'To reccord the distance of obstacle from bot first time when the bot is started'
+cmDistance1 VAR Word              'To keep recording the distance of the obstacles from bot as it moves around'
+cmDist1 VAR Word                  'Distance of obstacle fromm the bot's right side'
+cmDist2 VAR Word                  'Distance of obstacle fromm the bot's left side'
+speed CON 17                      'Speed of the robot'
+time VAR Word                     'To record the time taken for the pulse sent by ultrasonic sensor to travel from the'
+                                  'obstacle back to the bot'
+total_area VAR Word               'to store the total area the robot has cleaned
+total_area = 0                    'initializing total area to 0 at start of program
+x VAR Word                        'to measure tilt in x direction
+y VAR Word                        'to measure tilt in y direction
+LcdOff CON 21                     'turns display off
+LcdCls CON 12                     'clears the LCD screen
+LcdOn CON 22                      'Turns display on
+Line0 CON 128                     'Line 0, character 0
+Line1 CON 148                     'Line 1, character 0
+LcdPin PIN 11                     'LCD I/O pin
+T9600 CON 84                      'True, 8-bits, no parity, 9600
+Left_Wheel_Servo PIN 13           'Pin no. of servo motor attached to left wheel'
+Right_Wheel_Servo PIN 12          'Pin no. of servo motor attached to left wheel'
+Front_Servo PIN 14
+
+SEROUT LcdPin, T9600, [LcdOn, LcdCls]    ' Initialize LCD
+
+'Record the distance of obstacle from bot first time when the bot is started'
+'and add it to the total area'
+Start:
+'Send and recieve pulses for measuring the distance from obstacle'
+PULSOUT 4, 5
+PULSIN 4, 1, time
+cmDistance = CmConstant ** time
+total_area = total_area + (cmDistance*7)
+GOTO Normal
+
+'Start normal operation of robot'
+Normal:
+'Start a do loop'
+DO
+
+ 'Send pulses for measuring tilt values in x and y directions'
+ PULSIN 6, 1, x
+ PULSIN 7, 1, y
+
+ 'DEBUG HOME, DEC4 ? X, DEC4 ? Y                                           =
+
+ 'For making the bot move in forward direction'
+ PULSOUT Left_Wheel_Servo, 850
+ PULSOUT Right_Wheel_Servo, 650
+
+ 'Displaying the area value on the LCD screen'
+ SEROUT LcdPin, T9600, [LcdCls, Line0, "Area:",DEC5 total_area," sqcm"]
+ 'DEBUG HOME, "Area: ", DEC5 total_area, " sqcm", CR'
+
+ 'to keep recording the distance of the obstacles from bot as it moves around'
+ PULSOUT 4, 5
+ PULSIN 4, 1, time
+ cmDistance1 = CmConstant ** time
+
+ 'Condition for bot's movemment when the distancce from obstacle is less than 10cm'
+ IF cmDistance1 <= 10 THEN
+    FOR counter= 1 TO 100                              'Start a repeating cycle that repeats 100 times
+      PULSOUT Front_Servo, 250                         'Send information to front servo to move to right position
+      PAUSE 10                                         'Pause for 10 ms to allow servo to process info
+    NEXT
+
+    'Send and recieve pulses for measuring the distance from obstacle on the bot's right side' `
+    PULSOUT 4, 5
+    PULSIN 4, 1, time
+    cmDist1= CmConstant ** time
+    'DEBUG DEC3 cmDist1, " cm"
+
+    'Checking if user has pressed emergency shutdown button and shutting down bot if user has pressed'
+    'the emergency shutdown button'
+    IF IN3=1 THEN
+      PAUSE 100                                       'Pause for 100 milliseconds to check if user has pressed the button'
+      GOTO Manual_Shutdown
+    ENDIF
+
+    IF IN2=1 THEN
+      PAUSE 100                                                   'Pause for 100 milliseconds to check if user has pressed the button'
+      SEROUT LcdPin, T9600, [LcdCls,"Speed: ",DEC2 speed,"cm/s"]  'Displays speed of the robot'
+      PAUSE 1000
+    ENDIF
+
+
+    FOR counter= 1 TO 100                             'Start another repeating cycle that repeats 100 times
+      PULSOUT Front_Servo,1250                        'Send information to front servo to move to left position
+      PAUSE 10                                        'Pause for 10 ms to allow servo to process info
+    NEXT
+
+    'Send and recieve pulses for measuring the distance from obstacle on the bot's left side'
+    PULSOUT 4, 5
+    PULSIN 4, 1, time
+    cmDist2= CmConstant ** time
+    'DEBUG DEC3 cmDist2, " cm"
+
+
+    'Checking if user has pressed emergency shutdown button and shutting down bot if user has pressed'
+    'the emergency shutdown button'
+    IF IN3=1 THEN
+      PAUSE 100                                                 'Pause for 100 milliseconds to check if user has pressed the button'
+      GOTO Manual_Shutdown
+    ENDIF
+
+    IF IN2=1 THEN                                                'Pause for 100 milliseconds to check if user has pressed the button'
+      PAUSE 100
+      SEROUT LcdPin, T9600, [LcdCls,"Speed: ",DEC2 speed,"cm/s"]            'Displays speed of the robot'
+      PAUSE 1000
+    ENDIF
+
+    'Compare the distances of obstacles fromm the bot's left and right side and then accordingly turn in'
+    'the direction in which the obstacle is more farther from it'
+
+    'If distance from obstacle on right side is less than distance from obstacle on left side then turn left'
+    IF cmDist1 < cmDist2 THEN
+        PAUSE 100
+        FOR counter= 1 TO 15
+          PULSOUT Right_Wheel_Servo, 650
+          PULSOUT Left_Wheel_Servo, 650
+          PAUSE 20
+        NEXT
+
+    'Else If distance from obstacle on left side is less than distance from obstacle on right side then turn right'
+    ELSEIF cmDist2 < cmDist1 THEN
+        PAUSE 100
+        FOR counter= 1 TO 15
+          PULSOUT Right_Wheel_Servo, 850
+          PULSOUT Left_Wheel_Servo, 850
+          PAUSE 20
+        NEXT
+
+    'If the distance on both sides is less than the turning radius'
+    ELSEIF cmDist2 <= 14 AND cmDist1<= 14 THEN
+         PAUSE 100
+         STOP
+
+    ENDIF
+
+    FOR counter= 1 TO 100                   'Start a repeating cycle that repeats 100 times
+      PULSOUT Front_Servo,750               'Send information TO servo TO move TO intial position
+      PAUSE 10                              'Pause for 10 ms to allow servo to process info
+    NEXT
+
+    GOTO Start                              'Go back to start program bock to update the total'
+                                            'area cleaned AND again start normal operation'
+  ENDIF
+
+ 'Checking if user has pressed emergency shutdown button and shutting down bot if user has pressed'
+ 'the emergency shutdown button'
+ IF IN3=1 THEN
+ PAUSE 100          'Pause for 100 milliseconds to check if user has pressed the button'
+ GOTO Manual_Shutdown
+ ENDIF
+
+ IF IN2=1 THEN                                       'Pause for 100 milliseconds to check if user has pressed the button'
+    PAUSE 100
+    SEROUT LcdPin, T9600, [LcdCls,"Speed: ",DEC2 speed,"cm/s"]    'Displays speed of the robot'
+    PAUSE 1000
+ ENDIF
+
+ 'If the tilt value in x or y directions is greater than the given values then shut down bot'
+ IF y > 2700 THEN                                     'Values for ccondition have been decided after testing the robot on'
+                                                      'extreme inclines'
+  SEROUT LcdPin, T9600, [LcdCls]                      'Clear LCD screen'
+  SEROUT LcdPin, T9600, ["Incline Detected"]          'Display message of steep incline on LCD screen'
+  PAUSE 2000                                          'Pause for 2 seconds for user to read message'
+  SEROUT LcdPin, T9600, [Line1, "Shutting Down"]      'Display message bot is shutting down'
+  PAUSE 2000                                          'Pause for 2 seconds for user to read message'
+  SEROUT LcdPin, T9600, [LcdCls, LcdOff]              'Clear LCD screen and turn off LCD screen'
+  STOP                                                'Stop the bot'
+ ENDIF
+
+ PAUSE 10
+
+LOOP                                                  'End of main loop'
+
+'For manual shutdown of bot'
+Manual_Shutdown:
+SEROUT LcdPin, T9600, [LcdCls, "Shutting Down"]      'Display message bot is shutting down'
+PAUSE 2000                                           'Pause for 2 seconds for user to read message'
+SEROUT LcdPin, T9600, [LcdCls, LcdOff]               'Clear LCD screen and turn off LCD screen'
+STOP                                                 'Shut down the bot'
+'End of entire program'
